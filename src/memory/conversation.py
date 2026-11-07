@@ -5,7 +5,7 @@ import psycopg
 
 
 class GraceMemory:
-    """Store recent turns and prepare document/chunk tables for ingestion."""
+    """Store conversation history and prepare document/chunk tables for ingestion."""
 
     def __init__(self, database_url: str, max_turns: int = 8) -> None:
         if not database_url:
@@ -54,9 +54,4 @@ class GraceMemory:
             db.executemany(
                 "INSERT INTO grace.conversation_turns(role, content) VALUES (%s, %s)",
                 [("user", user_text), ("assistant", assistant_text)],
-            )
-            db.execute(
-                "DELETE FROM grace.conversation_turns WHERE id NOT IN "
-                "(SELECT id FROM grace.conversation_turns ORDER BY id DESC LIMIT %s)",
-                (self.max_turns * 2,),
             )
