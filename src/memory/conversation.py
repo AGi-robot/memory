@@ -1,107 +1,56 @@
-"""PostgreSQL-backed chat history prepared for later semantic indexing."""
+"""SQLite-backed conversation history for Grace's short-term context."""
 from __future__ import annotations
 
-from uuid import UUID, uuid4
-
-import psycopg
+import sqlite3
+from pathlib import Path
+from uuid import uuid4
 
 
 class GraceMemory:
-    """Keep canonical chat records with stable IDs and conversation boundaries."""
+    """Persist recent user and assistant turns in a local SQLite database."""
 
-    def __init__(self, database_url: str, max_turns: int = 8) -> None:
-        if not database_url:
-            raise ValueError("Set AIVA_DATABASE_URL to Grace's PostgreSQL database")
-        self.database_url = database_url
+    def __init__(self, database_path: str, max_turns: int = 8) -> None:
+        self.database_path = Path(database_path).expanduser()
+        self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self.max_turns = max(1, max_turns)
+        self.conversation_id = "default"
         self._initialize()
-        self.conversation_id = self._get_default_conversation_id()
 
-    def _connect(self) -> psycopg.Connection:
-        return psycopg.connect(self.database_url)
+    def _connect(self) -> sqlite3.Connection:
+        db = sqlite3.connect(self.database_path, timeout=10)
+        db.execute("PRAGMA foreign_keys = ON")
+        return db
 
     def _initialize(self) -> None:
         with self._connect() as db:
-            db.execute("CREATE SCHEMA IF NOT EXISTS grace")
             db.execute(
-                "CREATE TABLE IF NOT EXISTS grace.conversations ("
-                "id UUID PRIMARY KEY DEFAULT gen_random_uuid(), "
-                "title TEXT, is_default BOOLEAN NOT NULL DEFAULT FALSE, "
-                "metadata JSONB NOT NULL DEFAULT '{}'::jsonb, "
-                "created_at TIMESTAMPTZ NOT NULL DEFAULT now())"
+                "CREATE TABLE IF NOT EXISTS conversations ("
+                "id TEXT PRIMARY KEY, title TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"
             )
             db.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS conversations_one_default "
-                "ON grace.conversations (is_default) WHERE is_default"
-            )
-            db.execute(
-                "CREATE TABLE IF NOT EXISTS grace.conversation_turns ("
-                "id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, "
+                "CREATE TABLE IF NOT EXISTS conversation_turns ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "conversation_id TEXT NOT NULL REFERENCES conversations(id), "
+                "exchange_id TEXT NOT NULL, "
                 "role TEXT NOT NULL CHECK (role IN ('user', 'assistant')), "
-                "content TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now())"
-            )
-            # Additive migration: old rows are retained and attached to the default
-            # conversation, while new rows carry IDs and metadata for future indexing.
-            db.execute(
-                "ALTER TABLE grace.conversation_turns "
-                "ADD COLUMN IF NOT EXISTS conversation_id UUID "
-                "REFERENCES grace.conversations(id)"
-            )
-            db.execute(
-                "ALTER TABLE grace.conversation_turns "
-                "ADD COLUMN IF NOT EXISTS exchange_id UUID"
-            )
-            db.execute(
-                "ALTER TABLE grace.conversation_turns "
-                "ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb"
-            )
-            db.execute(
-                "CREATE TABLE IF NOT EXISTS grace.knowledge_documents ("
-                "id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, "
-                "title TEXT NOT NULL, source TEXT, content_hash TEXT UNIQUE, "
-                "created_at TIMESTAMPTZ NOT NULL DEFAULT now())"
-            )
-            db.execute(
-                "CREATE TABLE IF NOT EXISTS grace.knowledge_chunks ("
-                "id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, "
-                "document_id BIGINT NOT NULL REFERENCES grace.knowledge_documents(id) ON DELETE CASCADE, "
-                "chunk_index INTEGER NOT NULL, content TEXT NOT NULL, "
-                "UNIQUE(document_id, chunk_index))"
-            )
-            db.execute(
-                "INSERT INTO grace.conversations (title, is_default) "
-                "VALUES ('Grace chat', TRUE) ON CONFLICT DO NOTHING"
-            )
-            db.execute(
-                "UPDATE grace.conversation_turns SET conversation_id = ("
-                "SELECT id FROM grace.conversations WHERE is_default) "
-                "WHERE conversation_id IS NULL"
-            )
-            db.execute(
-                "ALTER TABLE grace.conversation_turns "
-                "ALTER COLUMN conversation_id SET NOT NULL"
+                "content TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"
             )
             db.execute(
                 "CREATE INDEX IF NOT EXISTS conversation_turns_order "
-                "ON grace.conversation_turns (conversation_id, id DESC)"
+                "ON conversation_turns (conversation_id, id DESC)"
+            )
+            db.execute(
+                "INSERT OR IGNORE INTO conversations (id, title) VALUES (?, ?)",
+                (self.conversation_id, "Grace chat"),
             )
 
-    def _get_default_conversation_id(self) -> UUID:
-        with self._connect() as db:
-            row = db.execute(
-                "SELECT id FROM grace.conversations WHERE is_default"
-            ).fetchone()
-        if row is None:
-            raise RuntimeError("Could not initialize Grace's default conversation")
-        return row[0]
-
-    def recent(self, conversation_id: UUID | None = None) -> list[dict[str, str]]:
-        conversation_id = conversation_id or self.conversation_id
+    def recent(self, conversation_id: str | None = None) -> list[dict[str, str]]:
+        active_conversation = conversation_id or self.conversation_id
         with self._connect() as db:
             rows = db.execute(
-                "SELECT role, content FROM grace.conversation_turns "
-                "WHERE conversation_id = %s ORDER BY id DESC LIMIT %s",
-                (conversation_id, self.max_turns * 2),
+                "SELECT role, content FROM conversation_turns "
+                "WHERE conversation_id = ? ORDER BY id DESC LIMIT ?",
+                (active_conversation, self.max_turns * 2),
             ).fetchall()
         return [{"role": role, "content": content} for role, content in reversed(rows)]
 
@@ -109,17 +58,16 @@ class GraceMemory:
         self,
         user_text: str,
         assistant_text: str,
-        conversation_id: UUID | None = None,
+        conversation_id: str | None = None,
     ) -> None:
-        conversation_id = conversation_id or self.conversation_id
-        exchange_id = uuid4()
+        active_conversation = conversation_id or self.conversation_id
+        exchange_id = str(uuid4())
         with self._connect() as db:
             db.executemany(
-                "INSERT INTO grace.conversation_turns "
-                "(conversation_id, exchange_id, role, content) "
-                "VALUES (%s, %s, %s, %s)",
+                "INSERT INTO conversation_turns "
+                "(conversation_id, exchange_id, role, content) VALUES (?, ?, ?, ?)",
                 [
-                    (conversation_id, exchange_id, "user", user_text),
-                    (conversation_id, exchange_id, "assistant", assistant_text),
+                    (active_conversation, exchange_id, "user", user_text),
+                    (active_conversation, exchange_id, "assistant", assistant_text),
                 ],
             )
