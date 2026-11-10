@@ -62,7 +62,16 @@ class GraceMemory:
     ) -> None:
         active_conversation = conversation_id or self.conversation_id
         exchange_id = str(uuid4())
+        title = (
+            "Grace chat"
+            if active_conversation == self.conversation_id
+            else f"Conversation {active_conversation}"
+        )
         with self._connect() as db:
+            db.execute(
+                "INSERT OR IGNORE INTO conversations (id, title) VALUES (?, ?)",
+                (active_conversation, title),
+            )
             db.executemany(
                 "INSERT INTO conversation_turns "
                 "(conversation_id, exchange_id, role, content) VALUES (?, ?, ?, ?)",
