@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import contextmanager
+from collections.abc import Iterator
 from pathlib import Path
 from uuid import uuid4
 
@@ -16,10 +18,15 @@ class GraceMemory:
         self.conversation_id = "default"
         self._initialize()
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         db = sqlite3.connect(self.database_path, timeout=10)
-        db.execute("PRAGMA foreign_keys = ON")
-        return db
+        try:
+            db.execute("PRAGMA foreign_keys = ON")
+            with db:
+                yield db
+        finally:
+            db.close()
 
     def _initialize(self) -> None:
         with self._connect() as db:
