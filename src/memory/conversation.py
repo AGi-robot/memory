@@ -52,7 +52,15 @@ class GraceMemory:
                 "WHERE conversation_id = ? ORDER BY id DESC LIMIT ?",
                 (active_conversation, self.max_turns * 2),
             ).fetchall()
-        return [{"role": role, "content": content} for role, content in reversed(rows)]
+        history = []
+        for role, content in reversed(rows):
+            # Older Canvas versions stored the full drawing-action JSON as an
+            # assistant turn. Keep that legacy history useful without sending
+            # a potentially huge tool payload back to the model.
+            if role == "assistant" and content.startswith("Prepared ") and " canvas actions:" in content:
+                content = "I made a drawing on the shared Canvas."
+            history.append({"role": role, "content": content})
+        return history
 
     def add_exchange(
         self,
