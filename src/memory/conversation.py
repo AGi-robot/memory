@@ -66,6 +66,8 @@ class GraceMemory:
             # a potentially huge tool payload back to the model.
             if role == "assistant" and content.startswith("Prepared ") and " canvas actions:" in content:
                 content = "I made a drawing on the shared Canvas."
+            if role == "assistant" and " canvas actions (playback not confirmed): " in content:
+                content = content.split(" canvas actions (playback not confirmed): ", 1)[0] + " canvas actions (plan stored)."
             history.append({"role": role, "content": content})
         return history
 
