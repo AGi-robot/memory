@@ -41,9 +41,7 @@ class JournalBackend(MemoryBackend):
         return stored
 
     def search(self, query, *, limit=8):
-        ranked = sorted(self.entries,
-                        key=lambda e: scoring.score(e, query), reverse=True)
-        return ranked[:limit]
+        return scoring.rank(self.entries, query, limit)
 
     def recent(self, *, limit=20, agent=None):
         pool = [e for e in self.entries if agent is None or e.get('agent') == agent]

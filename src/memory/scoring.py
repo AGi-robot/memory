@@ -5,6 +5,7 @@ vector store. score(entry, terms) in [0, 1]; backends sort by it.
 """
 from __future__ import annotations
 
+import heapq
 import math
 import time
 
@@ -39,6 +40,18 @@ def recency_score(ts, now=None):
 
 def score(entry, query, *, now=None):
     query_terms = terms(query) if query else []
+    return _score(entry, query_terms, now)
+
+
+def _score(entry, query_terms, now):
     return (W_MATCH * match_score(entry.get('text', ''), query_terms)
             + W_IMPORTANCE * float(entry.get('importance', 0.5))
             + W_RECENCY * recency_score(entry.get('ts', 0), now))
+
+
+
+def rank(entries, query, limit):
+    """Rank all entries consistently, keeping only the best limit in memory."""
+    query_terms = terms(query) if query else []
+    now = time.time()
+    return heapq.nlargest(limit, entries, key=lambda entry: _score(entry, query_terms, now))
