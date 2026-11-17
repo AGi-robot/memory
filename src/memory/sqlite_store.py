@@ -44,20 +44,8 @@ class SqliteBackend(MemoryBackend):
         return stored
 
     def search(self, query, *, limit=8):
-        # broad LIKE prefilter, exact ranking in python (portable, no FTS5 dep)
-        words = scoring.terms(query)
-        rows = []
-        if words:
-            clause = ' OR '.join('text LIKE ?' for _ in words)
-            params = [f'%{w}%' for w in words]
-            rows = self.conn.execute(
-                f'SELECT * FROM entries WHERE {clause}', params).fetchall()
-        if not rows:
-            rows = self.conn.execute(
-                'SELECT * FROM entries ORDER BY ts DESC LIMIT 200').fetchall()
-        entries = [self._row(row) for row in rows]
-        entries.sort(key=lambda e: scoring.score(e, query), reverse=True)
-        return entries[:limit]
+        rows = self.conn.execute('SELECT * FROM entries ORDER BY id')
+        return scoring.rank((self._row(row) for row in rows), query, limit)
 
     def recent(self, *, limit=20, agent=None):
         if agent is None:

@@ -51,7 +51,7 @@ class MemoryBackend(ABC):
 
     @abstractmethod
     def search(self, query: str, *, limit: int = 8) -> list[dict]:
-        """Entries matching query words, best first (scoring module decides)."""
+        """Best entries by relevance, importance, and recency."""
 
     @abstractmethod
     def recent(self, *, limit: int = 20, agent: str | None = None) -> list[dict]:
