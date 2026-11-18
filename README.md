@@ -1,7 +1,25 @@
 # Mind
 
-The shared memory framework for the AGi agents — **Grace** (PC, AIVA, ROS2)
-and **Aiko** (Jetson, non-ROS alike).
+Mind is the shared memory component for AGi agents, including **Grace** (hosted
+by AIVA) and **Aiko**. It owns reusable memory APIs and storage; AIVA remains
+the runtime that connects Grace's chat, ROS topics, and user interface.
+
+## Current scope
+
+Mind currently provides two distinct pieces:
+
+- A general memory API with journal and SQLite backends for structured entries.
+- `memory.conversation.ConversationStore`, a SQLite store for paired user and
+  assistant turns. AIVA uses this store for Grace's chat history and adds its
+  own Canvas-specific study and context behavior in `GraceMemory`.
+
+Conversation history is persistent. `recent()` returns only the configured
+number of latest exchanges for active context; it does not delete older turns
+or perform semantic retrieval. The conversation store reuses the
+`conversations` and `conversation_turns` tables used by AIVA, so existing
+databases can be opened in place. Mind owns the shared storage implementation;
+the host application chooses the database path and its application-specific
+policies.
 
 ## Design
 
@@ -52,6 +70,11 @@ store.add_exchange("Hello Grace", "Hi!")
 recent = store.recent()
 ```
 
-The store uses the `conversations` and `conversation_turns` tables from
-AIVA's SQLite database. Existing history can be opened in place. AIVA owns
-the configured database path and uses its adapter to handle Canvas studies.
+Install Mind into the Python environment that runs the application. AIVA's
+`requirements.txt` installs the package from this repository. For local
+development, install the checkout with `pip install -e .` from the Mind root.
+
+The API deliberately returns simple role/content dictionaries suitable for a
+chat completion request. It does not call a language model, choose tools, or
+decide which memories are relevant. Those behaviors belong to the application
+or future Mind components.
