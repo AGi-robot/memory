@@ -47,22 +47,18 @@ mem.search('mug drawing')
 mem.recent(agent='grace', limit=20)
 ```
 
-## ROS 2 package
+## Python package
 
-The reusable Python library lives in `src/memory/`. The repository root also contains the `agi_memory` ament_python package
-metadata, so colcon can discover and install the library in the AIVA workspace.
-`agi_memory` does not start a ROS node: AIVA imports `memory.conversation`
-directly into its `aiva_chat` node and uses a local SQLite database. A separate
-ROS memory service would only be useful if multiple processes needed to share
-one store over ROS.
-
-In the AGi checkout, AIVA links this package into `AIVA/shell/src/agi_memory`;
-colcon builds it with the other workspace packages.
+The reusable Python library lives in `src/memory/` and installs into a Python
+environment with pip. It is not a ROS package or node. AIVA's `aiva_chat` imports
+`memory.conversation` directly and uses a local SQLite database. A separate ROS
+memory service would only be useful if multiple processes needed to share one
+store over ROS.
 
 ## Install
 
 ```bash
-pip install -e ~/AGi/AIVA/mind/memory  # into the agent's venv
+~/AGi/AIVA/shell/.venv/bin/python -m pip install -e ~/AGi/AIVA/mind/memory
 ```
 
 No third-party dependencies; stdlib only.
