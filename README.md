@@ -58,7 +58,7 @@ store over ROS.
 ## Install
 
 ```bash
-~/AGi/AIVA/shell/.venv/bin/python -m pip install -e ~/AGi/AIVA/mind/memory
+~/AGi/AIVA/.venv/bin/python -m pip install -e ~/AGi/AIVA/mind/memory
 ```
 
 No third-party dependencies; stdlib only.
