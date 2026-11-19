@@ -9,7 +9,6 @@ factory and get the whole suite for free:
 from __future__ import annotations
 
 import tempfile
-import time
 from pathlib import Path
 
 
