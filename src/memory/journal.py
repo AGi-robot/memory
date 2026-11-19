@@ -34,10 +34,10 @@ class JournalBackend(MemoryBackend):
 
     def append(self, entry):
         stored = normalize(entry)
-        self.entries.append(stored)
-        self._dirty = True
         if self.autosave:
             self._flush_one(stored)
+        self.entries.append(stored)
+        self._dirty = not self.autosave
         return stored
 
     def search(self, query, *, limit=8):
@@ -49,8 +49,14 @@ class JournalBackend(MemoryBackend):
         return pool[:limit]
 
     def _flush_one(self, entry):
-        with open(self.path, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+        with open(self.path, 'ab+') as f:
+            # A crash may leave a torn record or a valid record without its newline.
+            # Separate it from the new record so reopening cannot lose both.
+            if f.tell():
+                f.seek(-1, os.SEEK_END)
+                if f.read(1) != b'\n':
+                    f.write(b'\n')
+            f.write((json.dumps(entry, ensure_ascii=False) + '\n').encode('utf-8'))
             f.flush()
             os.fsync(f.fileno())
         self._dirty = False
