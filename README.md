@@ -37,9 +37,11 @@ policies.
 ## Usage
 
 ```python
+import os
 from memory import open_memory
 
-mem = open_memory('~/.agi/profile/grace.jsonl')   # or grace.db
+agi_home = os.environ.get('AGI_HOME', '~/.agi')
+mem = open_memory(f'{agi_home}/profile/grace.jsonl')   # or grace.db
 mem.append({'agent': 'grace', 'kind': 'dialogue',
             'text': 'OppaAI asked me to draw a mug',
             'tags': ['drawing'], 'importance': 0.7})
@@ -58,8 +60,13 @@ store over ROS.
 ## Install
 
 ```bash
-~/AGi/AIVA/.venv/bin/python -m pip install -e ~/AGi/AIVA/mind/memory
+cd AIVA
+.venv/bin/python -m pip install -e ./mind/memory
 ```
+
+When hosted by AIVA, its virtual environment and `AGI_HOME` defaults are defined
+in [AIVA's `spec.yaml`](../../spec.yaml). The runtime can override `AGI_HOME`
+through `AIVA/.env`.
 
 No third-party dependencies; stdlib only.
 
@@ -71,9 +78,11 @@ together and returns the latest exchanges for a given conversation, oldest
 first. The recall window does not delete older exchanges.
 
 ```python
+import os
 from memory.conversation import ConversationStore
 
-store = ConversationStore("~/.agi/profile/grace_memory.sqlite3", max_turns=8)
+agi_home = os.environ.get("AGI_HOME", "~/.agi")
+store = ConversationStore(f"{agi_home}/profile/grace_memory.sqlite3", max_turns=8)
 store.add_exchange("Hello Grace", "Hi!")
 recent = store.recent()
 ```
